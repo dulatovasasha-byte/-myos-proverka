@@ -539,7 +539,7 @@ async function tRestore(list) {
 
 // ---- лимиты ----
 var LEVELS = { ok: 'норма', warn: 'предупреждение (70%)', economy: 'режим экономии (85%)', stop: 'стоп (100%)' };
-function amount(i) { return i.unit === 'байт' ? mb(i.used) + ' из ' + mb(i.limit) : num(i.used) + ' из ' + num(i.limit) + ' ' + i.unit; }
+function amount(i) { return i.unit === 'байт' ? mb(i.used) + ' из ' + (i.limit >= 1e9 ? (i.limit / 1e9) + ' ГБ' : mb(i.limit)) : num(i.used) + ' из ' + num(i.limit) + ' ' + i.unit; }
 async function loadCounters() {
   var box = document.getElementById('counters');
   try {

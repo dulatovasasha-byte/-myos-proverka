@@ -115,7 +115,7 @@ with sync_playwright() as p:
     page.click("#limits >> text=Обновить")
     expect(page.locator("#counters")).to_contain_text("источник", timeout=10000)
     txt = page.locator("#counters").inner_text()
-    check("у счётчиков указан источник", txt.count("источник:") == 9 and "оценка MY OS" in txt and "Cloudflare" in txt and "подсчёт стенда" in txt)
+    check("у счётчиков указан источник", txt.count("источник:") == 10 and "оценка MY OS" in txt and "Cloudflare" in txt and "подсчёт стенда" in txt)
     check("сброс лимитов показан по местному времени", "по твоему времени" in txt)
 
     # Telegram: в Chromium «Поделиться» с файлами нет — проверяем честное сообщение

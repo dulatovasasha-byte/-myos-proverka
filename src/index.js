@@ -20,7 +20,8 @@ export const LIMITS = {
   kvReads: 100000,
   kvWrites: 1000, // записи + удаления + списки KV в сутки
   doRequests: 100000, // запросы к Durable Objects в сутки
-  doStorage: 5 * 1024 * 1024 * 1024, // всё хранилище Durable Objects аккаунта
+  doStorage: 5e9, // всё хранилище Durable Objects аккаунта (5 ГБ, считается в десятичных гигабайтах)
+  doObject: 1e9, // одно хранилище Durable Object на бесплатном тарифе
   neurons: 10000, // Workers AI в сутки
 };
 const WARN = 0.7;
@@ -417,14 +418,51 @@ export class FileStore extends DurableObject {
   }
 }
 
+// Файлы раскладываются по 5 хранилищам: на бесплатном тарифе одно хранилище вмещает 1 ГБ,
+// а всего на аккаунт — 5 ГБ. Номер хранилища зашит в номер файла, поэтому после
+// восстановления из копии файл возвращается в то же хранилище.
+const SHARDS = 5;
+const shardOf = (id) => {
+  const m = /^s(\d)-/.exec(id || "");
+  if (m) return Number(m[1]) % SHARDS;
+  let h = 0;
+  for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % SHARDS;
+};
+
 // Каждое обращение к хранилищу файлов — отдельный запрос Durable Objects, считаем его.
 function files(env) {
-  const stub = env.FILES.get(env.FILES.idFromName("main"));
-  const call = (method) => (...args) => {
+  const stubs = [...Array(SHARDS).keys()].map((i) => env.FILES.get(env.FILES.idFromName("files-" + i)));
+  const call = async (i, method, ...args) => {
     if (env.__m) env.__m.doRequests++;
-    return stub[method](...args);
+    try {
+      return await stubs[i][method](...args);
+    } catch (e) {
+      if (/SQLITE_FULL/.test(errorText(e)))
+        throw Object.assign(new Error("Хранилище файлов заполнено (1 ГБ на одно хранилище бесплатного тарифа). Чтение и удаление работают, новые файлы не сохраняются. Платный тариф не включён."), { status: 507 });
+      throw e;
+    }
   };
-  return { put: call("put"), get: call("get"), list: call("list"), verifyAll: call("verifyAll"), wipe: call("wipe"), stats: call("stats") };
+  const all = async (method) => Promise.all(stubs.map((_, i) => call(i, method)));
+  return {
+    put: (name, type, body, id, createdAt) => {
+      id = id || `s${Math.floor(Math.random() * SHARDS)}-${crypto.randomUUID()}`;
+      return call(shardOf(id), "put", name, type, body, id, createdAt);
+    },
+    get: (id) => call(shardOf(id), "get", id),
+    list: async () => (await all("list")).flat().sort((a, b) => (a.created_at + a.id < b.created_at + b.id ? -1 : 1)),
+    verifyAll: async () => (await all("verifyAll")).flat(),
+    wipe: async () => (await all("wipe")).reduce((a, b) => a + b, 0),
+    stats: async () => {
+      const s = await all("stats");
+      return {
+        files: s.reduce((a, b) => a + b.files, 0),
+        bytes: s.reduce((a, b) => a + b.bytes, 0),
+        databaseSize: s.reduce((a, b) => a + b.databaseSize, 0),
+        largestShard: Math.max(...s.map((x) => x.databaseSize)),
+      };
+    },
+  };
 }
 
 // ---------- тестовые данные: объекты, связи, версии, вложения ----------
@@ -574,7 +612,8 @@ async function counters(env) {
       row("База: строк прочитано", u.d1Read, LIMITS.d1Read, "в сутки", CF, "Сумма прочитанных строк, которые база сама указывает в каждом ответе."),
       row("База: строк записано", u.d1Written, LIMITS.d1Written, "в сутки", CF, "Сумма записанных строк из ответов базы плюс 1 строка учёта на каждый запрос."),
       row("Размер базы", u.d1Size, LIMITS.d1Size, "байт", "Cloudflare: размер базы из её последнего ответа", ""),
-      row("Хранилище файлов", fileStats.databaseSize, LIMITS.doStorage, "байт", "Cloudflare: размер хранилища файлов", `Файлов: ${fileStats.files}. Место после удаления освобождается не сразу.`),
+      row("Хранилище файлов, всего", fileStats.databaseSize, LIMITS.doStorage, "байт", "Cloudflare: размер 5 хранилищ файлов", `Файлов: ${fileStats.files}. Место после удаления освобождается не сразу.`),
+      row("Самое заполненное из 5 хранилищ", fileStats.largestShard, LIMITS.doObject, "байт", "Cloudflare: размер хранилища", "Одно хранилище вмещает 1 ГБ."),
       row("Обращения к хранилищу файлов", u.doRequests, LIMITS.doRequests, "в сутки", OWN, ""),
       row("Быстрое хранилище: чтения", u.kvReads, LIMITS.kvReads, "в сутки", OWN, ""),
       row("Быстрое хранилище: записи", u.kvWrites, LIMITS.kvWrites, "в сутки", OWN, "Самый жёсткий лимит: 1000 в сутки."),

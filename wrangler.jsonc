@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "myos-proverka",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "d1_databases": [{ "binding": "DB", "database_name": "myos-proverka" }],
+  "kv_namespaces": [{ "binding": "KV" }],
+  "ai": { "binding": "AI" },
+  "durable_objects": { "bindings": [{ "name": "FILES", "class_name": "FileStore" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FileStore"] }],
+  "triggers": { "crons": ["0 * * * *"] }
+}

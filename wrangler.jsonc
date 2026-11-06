@@ -3,6 +3,7 @@
   "name": "myos-proverka",
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
+  "workers_dev": true,
   "observability": { "enabled": true },
   "d1_databases": [{ "binding": "DB", "database_name": "myos-proverka" }],
   "kv_namespaces": [{ "binding": "KV" }],

@@ -13,7 +13,7 @@
 5. В Safari нажми «Поделиться» → «На экран «Домой»». Дальше открывай стенд только с этой иконки.
 6. Иди по шагам на странице сверху вниз. В конце нажми «Скопировать отчёт» и вставь отчёт в чат с Claude.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=__REPO_URL__)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/dulatovasasha-byte/-myos-proverka)
 
 Cloudflare сам создаст базу данных, хранилища, подключит бесплатный ИИ и таймер.
 
